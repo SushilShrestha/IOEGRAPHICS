@@ -23,9 +23,17 @@ class graphicsLibrary{
         void drawPixel(/*SDL_Surface*,*/ Uint32, int, int);
         void drawWC(wcCoord, bool display = false);
         wcCoord changeToViewCoordinate(wcCoord);
+        void changeToViewCoordinate();
         void drawLine(Uint32, wcCoord, wcCoord);
         void drawCircle(Uint32, wcCoord);
         void generateWC3D();
+
+        vector<wcCoord> tempPoly;
+        void triangleBegin();
+        void trianglePoint(wcCoord);
+        void triangleEnd();
+        void renderWiredFrame();
+        void scanLine();
 
         void setFrameRate(int);
 
@@ -49,6 +57,7 @@ class graphicsLibrary{
         SDL_Surface* screen;
 
         bool done;
+        bool polyBegin;
 
         float initialTransMat[3][3];
         float viewPointMat[4][4];
@@ -67,9 +76,11 @@ class graphicsLibrary{
 
 
         vector<wcCoord> vertexTable;
+        vector<wcCoord> finalVertex;
         vector<wcCoord>::iterator vertexIter;
         vector<Edge> edgeTable;
         vector<Polygon> polygonTable;
+        vector<Triangle> triangleTable;
 
         unsigned int addVertex(wcCoord);
         unsigned int addEdge(Edge);

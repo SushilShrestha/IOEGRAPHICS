@@ -21,6 +21,7 @@ graphicsLibrary::graphicsLibrary(){
     loadInitialTransMat();
     rotatex(0);
     done = false;
+    polyBegin = false;
     startTime = SDL_GetTicks();
     frame = 0;
 }
@@ -77,6 +78,7 @@ void graphicsLibrary::rotatez(float angle){
     };
     int sz = sizeof(rotationMat)/sizeof(**rotationMat);
     std::copy(*tempMat, (*tempMat) + sz, *rotationMat);
+    changeToViewCoordinate();
 }
 
 void graphicsLibrary::rotatex(float angle){
@@ -88,6 +90,7 @@ void graphicsLibrary::rotatex(float angle){
     };
     int sz = sizeof(rotationMat)/sizeof(**rotationMat);
     std::copy(*tempMat, (*tempMat) + sz, *rotationMat);
+    changeToViewCoordinate();
 }
 
 void graphicsLibrary::rotatey(float angle){
@@ -99,6 +102,7 @@ void graphicsLibrary::rotatey(float angle){
     };
     int sz = sizeof(rotationMat)/sizeof(**rotationMat);
     std::copy(*tempMat, (*tempMat) + sz, *rotationMat);
+    changeToViewCoordinate();
 }
 
 void graphicsLibrary::setViewPoint(wcCoord pos, int pRef){        //sets viewerPos and finally viewPoint Matrix
@@ -127,6 +131,8 @@ void graphicsLibrary::setViewPoint(wcCoord pos, int pRef){        //sets viewerP
     cout<<"v vector"<<v.x<<" "<<v.y<<" "<<v.z<<endl;
 
     cout << "Viewpoint set to "<<pos.x<<" "<<pos.y<< " "<<pos.z<<" vanishing point set to "<<vanisingPoint<<endl;
+
+    changeToViewCoordinate();
 }
 
 void graphicsLibrary::updateViewPointMat(){        //sets viewPointMat, lookat points to origin
@@ -218,6 +224,48 @@ void graphicsLibrary::drawPixel(/*SDL_Surface *screen,*/ Uint32 color, int x, in
     SDL_UpdateRect(screen, x, y, 1, 1);
 }
 
+void graphicsLibrary::changeToViewCoordinate(){
+    finalVertex.clear();
+    int num = vertexTable.size();
+    float tempMat[4][1];
+    tempMat[3][0] = 1;
+    for (int i =0;i<num;i++){
+        tempMat[0][0] = vertexTable[i].x;
+        tempMat[1][0] = vertexTable[i].y;
+        tempMat[2][0] = vertexTable[i].z;
+
+        matrixMul4X4(tempMat4x4, finalMat, rotationMat);
+        matrixMul4X1(tempMat4x1, tempMat4x4, tempMat);
+
+        tempMat4x1[0][0] /= tempMat4x1[3][0];
+        tempMat4x1[1][0] /= tempMat4x1[3][0];
+        tempMat4x1[2][0] /= tempMat4x1[3][0];
+
+        finalVertex.push_back(wcCoord(tempMat4x1[0][0], tempMat4x1[1][0], tempMat4x1[2][0]));
+    }
+    num = polygonTable.size();
+    wcCoord ta,tb,tc;
+    for (int i = 0; i<num; i++){
+        ta = finalVertex[edgeTable[polygonTable[i].first].fCoord];
+        tb = finalVertex[edgeTable[polygonTable[i].second].fCoord];
+        tc = finalVertex[edgeTable[polygonTable[i].third].fCoord];
+
+        polygonTable[i].A = ta.y * (tb.z - tc.z) + tb.y * (tc.z - ta.z) + tc.y * (ta.z - tb.z);
+        polygonTable[i].B = ta.z * (tb.x - tc.x) + tb.z * (tc.x - ta.x) + tc.z * (ta.x - tb.x);
+        polygonTable[i].C = ta.x * (tb.y - tc.y) + tb.x * (tc.y - ta.y) + tc.x * (ta.y - tb.y);
+        polygonTable[i].D = -ta.x * (tb.y * tc.z - tc.y * tb.z) - tb.x * (tc.y * ta.z - ta.y * tc.z) - tc.x  * (ta.y * tb.z - tb.y * ta.z);
+    }
+//
+
+//    matrixMul4X4(tempMat4x4, finalMat, rotationMat);
+//    matrixMul4X1(tempMat4x1, tempMat4x4, tempMat);
+//    pos.x = tempMat4x1[0][0]/tempMat4x1[3][0];
+//    pos.y = tempMat4x1[1][0]/tempMat4x1[3][0];
+//    pos.z = tempMat4x1[2][0]/tempMat4x1[3][0];
+//    return pos;
+//
+}
+
 wcCoord graphicsLibrary::changeToViewCoordinate(wcCoord pos){       //changes world coordinate to viewing coordinates
     float tempMat[4][1] = {pos.x, pos.y, pos.z, 1};
 //    matrixMul4X1(tempMat4x1, viewPointMat, tempMat);
@@ -237,8 +285,8 @@ void graphicsLibrary::drawWC(wcCoord pos, bool display){        //draws World Co
 }
 
 void graphicsLibrary::drawLine(Uint32 color, wcCoord initial, wcCoord final){   // draws line using Bresenham's Algorithm
-    initial = changeToViewCoordinate(initial);
-    final = changeToViewCoordinate(final);
+//    initial = changeToViewCoordinate(initial);
+//    final = changeToViewCoordinate(final);
 
     //Bresenham's Algorithm
     bool slopeMoreThan1 = false;
@@ -337,6 +385,155 @@ void graphicsLibrary::generateWC3D(){                   // for temporary testing
 }
 
 
+void graphicsLibrary::triangleBegin(){ // Note provide only three point to triangle or else it is not guarenteed to draw a triangle
+    polyBegin = true;
+    tempPoly.clear();
+}
+void graphicsLibrary::trianglePoint(wcCoord aPoint){
+    tempPoly.push_back(aPoint);
+}
+void graphicsLibrary::triangleEnd(){
+    if (!polyBegin){
+        cout<<"!!!!!polygon end without polygon begin"<<endl;
+        return;
+    }
+    polyBegin = false;
+    int numOfCoords = tempPoly.size();
+    if (numOfCoords%3 != 0 ){
+        cout<<"!!!!!number of coordinate not divisible by three"<<endl;
+    }
+    for (int i = 0; i< numOfCoords/3; i++){
+        addPolygon(Polygon(
+                addEdge(Edge(addVertex(tempPoly[i]), addVertex(tempPoly[i+1]))),
+                addEdge(Edge(addVertex(tempPoly[i+1]), addVertex(tempPoly[i+2]))),
+                addEdge(Edge(addVertex(tempPoly[i+2]), addVertex(tempPoly[i])))
+//                addEdge(Edge(addVertex(tempPoly[i+3]), addVertex(tempPoly[i])))
+                           ));
+    }
+    changeToViewCoordinate();
+    renderWiredFrame();
+}
+
+void graphicsLibrary::renderWiredFrame(){
+    int n = polygonTable.size();
+    for (int i =0;i<n;i++){
+        drawLine(COLOR_WHITE, finalVertex[edgeTable[polygonTable[i].first].iCoord], finalVertex[edgeTable[polygonTable[i].first].fCoord]);
+        drawLine(COLOR_WHITE, finalVertex[edgeTable[polygonTable[i].second].iCoord], finalVertex[edgeTable[polygonTable[i].second].fCoord]);
+        drawLine(COLOR_WHITE, finalVertex[edgeTable[polygonTable[i].third].iCoord], finalVertex[edgeTable[polygonTable[i].third].fCoord]);
+//        drawLine(COLOR_WHITE, finalVertex[edgeTable[polygonTable[i].forth].iCoord], finalVertex[edgeTable[polygonTable[i].forth].fCoord]);
+    }
+}
+
+void graphicsLibrary::scanLine(){
+
+    int n = polygonTable.size();
+    unsigned int ea,eb,ec;
+    unsigned int va,vb;
+    wcCoord bC, fC, tC;
+    Edge bE, fE, tE;
+
+    for (int i =0;i<n;i++){
+        ea = polygonTable[i].first;
+        eb = polygonTable[i].second;
+        ec = polygonTable[i].third;
+
+        //find minimum from finalVertex[bE.iCoord].x finalVertex[eb.iCoord].x
+//        bE = edgeTable[ea];
+        if (finalVertex[edgeTable[ea].iCoord].y<finalVertex[edgeTable[eb].iCoord].y){
+            if (finalVertex[edgeTable[ea].iCoord].y<finalVertex[edgeTable[ec].iCoord].y){
+                tC = finalVertex[edgeTable[ea].iCoord];
+                if (finalVertex[edgeTable[eb].iCoord].x<finalVertex[edgeTable[ec].iCoord].x){
+                    bC = finalVertex[edgeTable[eb].iCoord];
+                    fC = finalVertex[edgeTable[ec].iCoord];
+                }else{
+                    bC = finalVertex[edgeTable[ec].iCoord];
+                    fC = finalVertex[edgeTable[eb].iCoord];
+                }
+            }else{
+                tC = finalVertex[edgeTable[ec].iCoord];
+                if (finalVertex[edgeTable[eb].iCoord].x<finalVertex[edgeTable[ea].iCoord].x){
+                    bC = finalVertex[edgeTable[ea].iCoord];
+                    fC = finalVertex[edgeTable[ec].iCoord];
+                }else{
+                    bC = finalVertex[edgeTable[ec].iCoord];
+                    fC = finalVertex[edgeTable[ea].iCoord];
+                }
+            }
+        }else if(finalVertex[edgeTable[eb].iCoord].y<finalVertex[edgeTable[ec].iCoord].y){
+            tC = finalVertex[edgeTable[eb].iCoord];
+            if (finalVertex[edgeTable[ea].iCoord].x<finalVertex[edgeTable[ec].iCoord].x){
+                bC = finalVertex[edgeTable[ea].iCoord];
+                fC = finalVertex[edgeTable[ec].iCoord];
+            }else{
+                bC = finalVertex[edgeTable[ec].iCoord];
+                fC = finalVertex[edgeTable[ea].iCoord];
+            }
+        }else{
+            tC = finalVertex[edgeTable[ec].iCoord];
+            if (finalVertex[edgeTable[eb].iCoord].x<finalVertex[edgeTable[ea].iCoord].x){
+                bC = finalVertex[edgeTable[ea].iCoord];
+                fC = finalVertex[edgeTable[ec].iCoord];
+            }else{
+                bC = finalVertex[edgeTable[ec].iCoord];
+                fC = finalVertex[edgeTable[ea].iCoord];
+            }
+        }
+
+        int ymax;
+
+        if (finalVertex[edgeTable[ea].iCoord].y>finalVertex[edgeTable[eb].iCoord].y){
+            if (finalVertex[edgeTable[ea].iCoord].y>finalVertex[edgeTable[ec].iCoord].y){
+                ymax = finalVertex[edgeTable[ea].iCoord].y;
+            }
+        }else if(finalVertex[edgeTable[eb].iCoord].y>finalVertex[edgeTable[ec].iCoord].y){
+            ymax = finalVertex[edgeTable[eb].iCoord].y;
+        }else{
+            ymax = finalVertex[edgeTable[ec].iCoord].y;
+        }
+
+        int y;
+        y = tC.y;
+        drawWC(tC);
+        float bM, fM;
+        bM = (tC.y-bC.y)/(tC.x-bC.x);
+        fM = (tC.y-fC.y)/(tC.x-fC.x);
+        if (fabs(bM)<.00001) bM = 0;
+        if (fabs(fM)<.00001) fM = 0;
+
+        int x,xfinal;
+
+
+        while (y<ymax){
+            if (bM!=0 and fM!=0){
+                x = bC.x + (y-bC.y)/bM;
+                xfinal = fC.x + (y-fC.y)/fM;
+                drawLine(COLOR_WHITE, wcCoord(x,y,0), wcCoord(xfinal, y,0));
+            }
+            if (y >= bC.y){
+                tC = bC;
+                bC = fC;
+                bM = (tC.y-bC.y)/(tC.x-bC.x);
+            }else if (y >= fC.y ){
+                tC = fC;
+                fC = bC;
+                fM = (tC.y-fC.y)/(tC.x-fC.x);
+            }
+            y++;
+        }
+
+
+
+
+//        cout<<finalVertex[bE.iCoord].x<<endl;
+
+        //find edge with common point
+        //untill second edge does not cross over
+            //
+        //get nextedge
+    }
+
+
+}
 
 
 void graphicsLibrary::eventHandler(){   //event handlers
@@ -480,7 +677,7 @@ void graphicsLibrary::testDisplay(){
     }
     cout<<"Polygon table"<<endl;
     for (int i = 0 ; i<polygonTable.size() ; i++){
-        cout<<polygonTable[i].first<<" "<<polygonTable[i].second<<" "<<polygonTable[i].third<<" "<<&polygonTable[i]<<endl;
+        cout<<polygonTable[i].first<<" "<<polygonTable[i].second<<" "<<polygonTable[i].third<<" "<<endl;
     }
 }
 
@@ -491,11 +688,19 @@ void graphicsLibrary::sandBox(){
     torus();
 
 
+//     triangleBegin();
+//            trianglePoint(wcCoord(-100,0,0));
+//            trianglePoint(wcCoord(100,0,0));
+//            trianglePoint(wcCoord(100,200,0));
+//            //engine.polygonPoint(wcCoord(0,100,0));
+//     triangleEnd();
+//     scanLine();
 
-//    addEdge(Edge(addVertex(wcCoord(0,0,0)),addVertex(wcCoord(0,10,0))));
-//    addEdge(Edge(addVertex(wcCoord(10,10,0)), addVertex(wcCoord(10,0,0))));
-//    addEdge(Edge(addVertex(wcCoord(0,0,0)),addVertex(wcCoord(0,10,0))));
-//
+//    unsigned int a = addEdge(Edge(addVertex(wcCoord(0,0,0)),addVertex(wcCoord(0,10,0))));
+//    unsigned int b = addEdge(Edge(addVertex(wcCoord(10,10,0)), addVertex(wcCoord(10,0,0))));
+//    unsigned int c = addEdge(Edge(addVertex(wcCoord(0,0,30)),addVertex(wcCoord(0,10,30))));
+//    unsigned int d = addEdge(Edge(addVertex(wcCoord(033,0,0)),addVertex(wcCoord(40,10,30))));
+//    addPolygon(Polygon(a,b,c,d));
 //
 //    wcCoord a(180,0,0),b(90,10,0);
 //    Edge e1(addVertex(a),addVertex(b));
@@ -529,13 +734,33 @@ void graphicsLibrary::sphere(){
             vertexTable.push_back(temp);
         }
     }
+    changeToViewCoordinate();
+
     int n = vertexTable.size();
-    for (int j = 0 ; j< hSlice ; j++){
+
+    for (int i = 0 ; i<n ; i++){
+        drawWC(vertexTable[i]);
+    }
+
+    for (int j = 0 ; j< hSlice-1 ; j++){
         for (int i = 0 ; i < vSlice ; i++ ){
-            drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+1]);
-            if (j != hSlice-1) drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+vSlice]);
+            //drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+1]);
+
+            //this code does same thing as triangle begin .....triangle begin is abit slower
+            addPolygon(Polygon(addEdge(Edge(addVertex(vertexTable[j * hSlice + i]), addVertex(vertexTable[j * hSlice +i+1]))),
+                               addEdge(Edge(addVertex(vertexTable[j * hSlice +i+1]), addVertex(vertexTable[j * hSlice +i+vSlice]))),
+                               addEdge(Edge(addVertex(vertexTable[j * hSlice +i+vSlice]), addVertex(vertexTable[j * hSlice +i])))
+                    ));
+//        triangleBegin();
+//            trianglePoint(vertexTable[j * hSlice + i]);
+//            trianglePoint(vertexTable[j * hSlice +i+1]);
+//            trianglePoint(vertexTable[j * hSlice +i+vSlice]);
+//        triangleEnd();
+//            if (j != hSlice-1) drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+vSlice]);
         }
     }
+
+    renderWiredFrame();
 //    for (int i = 0; i < n-2 ; i++){
 //        drawLine(COLOR_WHITE, vertexTable[i], vertexTable[i+1]);
 //    }
@@ -562,11 +787,32 @@ void graphicsLibrary::cylinder(){
         }
     }
     int n = vertexTable.size();
-    for (int j = 0 ; j< hSlice ; j++){
+    for (int j = 0 ; j< hSlice-1 ; j++){
         for (int i = 0 ; i < vSlice-1 ; i++ ){
-            drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+1]);
-            if (j != hSlice-1) drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+vSlice]);
+            drawWC(vertexTable[j*vSlice+i]);
+            triangleBegin();
+                trianglePoint(vertexTable[j*vSlice+i]);
+                trianglePoint(vertexTable[j*vSlice+i+1]);
+                trianglePoint(vertexTable[j*vSlice+i+vSlice]);
+            triangleEnd();
+            triangleBegin();
+                trianglePoint(vertexTable[j*vSlice+i+1]);
+                trianglePoint(vertexTable[j*vSlice+i+1+vSlice]);
+                trianglePoint(vertexTable[j*vSlice+i+vSlice]);
+            triangleEnd();
+//            drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+1]);
+//            if (j != hSlice-1) drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+vSlice]);
         }
+        triangleBegin();
+            trianglePoint(vertexTable[j*vSlice+vSlice-1]);
+            trianglePoint(vertexTable[j*vSlice]);
+            trianglePoint(vertexTable[j*vSlice+vSlice]);
+        triangleEnd();
+        triangleBegin();
+            trianglePoint(vertexTable[j*vSlice+vSlice-1]);
+            trianglePoint(vertexTable[j*vSlice+vSlice]);
+            trianglePoint(vertexTable[j*vSlice+vSlice+vSlice-1]);
+        triangleEnd();
     }
 //    for (int i = 0; i < n-1 ; i++){
 //        for(int j = 0 ; j < vSlice-1 ; i++,j++)
@@ -579,14 +825,14 @@ void graphicsLibrary::torus(){
     vertexTable.clear();
     wcCoord temp;
 
-    int vSlice = 25;
-    int hSlice = 25 ;
+    int vSlice = 10;
+    int hSlice = 10;
 
     //if c>a its a doughnut/ring torus
     //if c==a its a horn torus
     //c<a spindle torus
-    int rTorus = 100 ;   //c
-    int rTube = 50;     //a
+    int rTorus = 50 ;   //c
+    int rTube = 25;     //a
 
     float dPhi = 360 / vSlice;
     float dTheta = 360 / hSlice;
@@ -601,13 +847,57 @@ void graphicsLibrary::torus(){
         }
     }
     int n = vertexTable.size();
-    for (int j = 0 ; j< hSlice ; j++){
-        for (int i = 0 ; i < vSlice ; i++ ){
+    for (int j = 0 ; j< hSlice-1 ; j++){
+        for (int i = 0 ; i < vSlice-1 ; i++ ){
 //            drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+1]);
 //            if (j != hSlice-1) drawLine(COLOR_WHITE, vertexTable[j*hSlice+i], vertexTable[j*hSlice+i+vSlice]);
-            drawWC(vertexTable[j*hSlice+i]);
+            triangleBegin();//upright triangle
+                trianglePoint(vertexTable[j*vSlice+i]);
+                trianglePoint(vertexTable[j*vSlice+i+1]);
+                trianglePoint(vertexTable[j*vSlice+i+vSlice]);
+            triangleEnd();
+            triangleBegin();//down right triangle
+                trianglePoint(vertexTable[j*vSlice+i+1]);
+                trianglePoint(vertexTable[j*vSlice+i+1+vSlice]);
+                trianglePoint(vertexTable[j*vSlice+i+vSlice]);
+            triangleEnd();
+            drawWC(vertexTable[j*vSlice+i]);
         }
+        triangleBegin();//last piece of the cylinder block
+            trianglePoint(vertexTable[j*vSlice+vSlice-1]);
+            trianglePoint(vertexTable[j*vSlice]);
+            trianglePoint(vertexTable[j*vSlice+vSlice-1+vSlice]);
+        triangleEnd();
+        triangleBegin();
+            trianglePoint(vertexTable[j*vSlice]);
+            trianglePoint(vertexTable[j*vSlice+vSlice]);
+            trianglePoint(vertexTable[j*vSlice+vSlice-1+vSlice]);
+        triangleEnd();
     }
+    //connecting back to first circle
+    for (int i = 0 ; i < vSlice-1 ; i++ ){
+        triangleBegin();
+            trianglePoint(vertexTable[i]);
+            trianglePoint(vertexTable[i+1]);
+            trianglePoint(vertexTable[i+vSlice*(vSlice-1)]);
+        triangleEnd();
+        triangleBegin();
+            trianglePoint(vertexTable[i+1]);
+            trianglePoint(vertexTable[i+1+vSlice*(vSlice-1)]);
+            trianglePoint(vertexTable[i+vSlice*(vSlice-1)]);
+        triangleEnd();
+    }
+    triangleBegin();
+        trianglePoint(vertexTable[vSlice-1]);
+        trianglePoint(vertexTable[0]);
+        trianglePoint(vertexTable[vSlice-1+vSlice*(vSlice-1)]);
+    triangleEnd();
+    triangleBegin();
+        trianglePoint(vertexTable[0]);
+        trianglePoint(vertexTable[vSlice*(vSlice-1)]);
+        trianglePoint(vertexTable[vSlice-1+vSlice*(vSlice-1)]);
+    triangleEnd();
+
 //    for (int i = 0; i < n-2 ; i++){
 //        drawLine(COLOR_WHITE, vertexTable[i], vertexTable[i+1]);
 //    }

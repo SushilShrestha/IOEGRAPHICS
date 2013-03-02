@@ -8,7 +8,7 @@
 #ifdef __APPLE__
 #include <SDL/SDL.h>
 #else
-#include <SDL.h>
+#include <SDL/SDL.h>
 #endif
 #include<iostream>
 #include<cstdarg>
@@ -70,21 +70,27 @@ struct Edge{
     }
 };
 struct Polygon{
-    vector<Edge*> polyEdges;
-    Edge *first, *second, *third;
-    Polygon(Edge* a, Edge* b, Edge* c){
+//    vector<unsigned int> polyEdges;
+    unsigned int first, second, third;//three points of triangle
+    float A, B, C, D;//normal vector  plane parameters
+    Polygon(unsigned int a, unsigned int b, unsigned int c){
         first = a;
         second = b;
         third = c;
     }
-    Polygon(int numArg, ...){
-        va_list args;
-        va_start(args, numArg);
-        for (int i = 0 ; i < numArg ; i++){
-            polyEdges.push_back(va_arg(args, Edge*));
-        }
-        va_end(args);
+//    Polygon(int numArg, ...){
+//        va_list args;
+//        va_start(args, numArg);
+//        for (int i = 0 ; i < numArg ; i++){
+//            polyEdges.push_back(va_arg(args, Edge*));
+//        }
+//        va_end(args);
+//    }
+};
+struct Triangle{
+    unsigned int first, second, third;
+    Triangle(unsigned int a, unsigned int b, unsigned int c){
+        first = a;second = b;third = c;
     }
 };
-
 #endif
